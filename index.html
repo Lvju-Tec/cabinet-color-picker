@@ -134,6 +134,24 @@ function findColor(n) {
   for (var i = 0; i < COLORS.length; i++) if (COLORS[i].n === n) return COLORS[i];
 }
 
+// 灰度 mask 无 alpha 通道（浏览器解码后 alpha 全为 255），
+// 这里把灰度值转成 alpha，生成可用于 destination-in 的遮罩，仅构建一次。
+var maskCanvas = null;
+function buildAlphaMask() {
+  var c = document.createElement("canvas");
+  c.width = W; c.height = H;
+  var x = c.getContext("2d");
+  x.drawImage(imMask, 0, 0, W, H);
+  var img = x.getImageData(0, 0, W, H);
+  var d = img.data;
+  for (var i = 0; i < d.length; i += 4) {
+    var g = d[i]; // 灰度图 R=G=B，取其亮度作为不透明度
+    d[i] = 255; d[i + 1] = 255; d[i + 2] = 255; d[i + 3] = g;
+  }
+  x.putImageData(img, 0, 0);
+  maskCanvas = c;
+}
+
 function draw(hex) {
   ctx.clearRect(0, 0, W, H);
   ctx.globalAlpha = 1;
@@ -147,7 +165,7 @@ function draw(hex) {
   octx.fillStyle = hex;
   octx.fillRect(0, 0, W, H);
   octx.globalCompositeOperation = "destination-in";
-  octx.drawImage(imMask, 0, 0, W, H);
+  octx.drawImage(maskCanvas, 0, 0, W, H);
   ctx.drawImage(oc, 0, 0);
 
   // 毛毡纹理层：纹理平铺后用 mask 裁剪，overlay 混合
@@ -163,7 +181,7 @@ function draw(hex) {
   tctx.fillStyle = pat;
   tctx.fillRect(0, 0, W, H);
   tctx.globalCompositeOperation = "destination-in";
-  tctx.drawImage(imMask, 0, 0, W, H);
+  tctx.drawImage(maskCanvas, 0, 0, W, H);
   tctx.restore();
   ctx.globalCompositeOperation = "overlay";
   ctx.globalAlpha = 0.5;
@@ -213,6 +231,7 @@ function select(n) {
 
 Promise.all([imCab, imMask, imTex]).then(function (ims) {
   imCab = ims[0]; imMask = ims[1]; imTex = ims[2];
+  buildAlphaMask();
   renderChips();
   renderGrid();
   draw("#EBB25C");
